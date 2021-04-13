@@ -10,12 +10,6 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 ```
 
-```{r}
-test for making changes
-```
-
-## R Markdown
-
 ```{r read-in data, echo = F}
 pilot_path = paste(getwd(), "/pilot2_data_raw/", sep = "")
 list_of_datanames = list.files(pilot_path)
@@ -34,9 +28,6 @@ data_quest = data.frame(
 ```
 
 ```{r now do some data preprocessing, echo = F}
-# ind = seq(1, nrow(dat_p2), by=11)
-# dat_p3 = dat_p2[ind, ]
-
 dat_clean = dat_p2 %>% 
   group_by(participant) %>% 
   # get rid of practice trials
@@ -61,7 +52,7 @@ dat_clean = dat_p2 %>%
     RespTuringRight = recode(
       RespTuringRight, `1` = "comp", `2` = "human")) %>%
   # remove some vars
-  select(-c(1:4,7:12, 15:17, 19:70)) %>%
+  select(-c(1:4,7:12, 15:82, 93:116, 130:138)) %>%
   ## Delete every 11th row
   filter(
     is.na(Number)==F,
@@ -91,9 +82,7 @@ dat_clean = dat_p2 %>%
   ungroup(participant)
 ```
 
-## Here are some Plots to visualize the results
-
-## First, is how many instances of choices do we have?
+## Here are some Plots to visualize the results\ First, is how many instances of choices do we have?
 ```{r, fig.height=8, fig.width=8}
 dat_clean %>%
   group_by(participant, Partner, Block.thisN) %>% 
@@ -120,8 +109,8 @@ dat_clean %>%
   
 ```
 
-## Next, we have the actual sync values. Sync values are calculated as percentages.
-## RT_participant1 - RT_participant2 / (RT_participant1 + RT_participant2)
+## Next, we have the actual sync values. Sync values are calculated as percentages. The formula is\ RT_participant1 - RT_participant2 / (RT_participant1 + RT_participant2)
+
 ```{r}
 dat_clean %>%
   ggplot(aes(y = sync_value, x = Partner, color = choice))+
@@ -132,6 +121,16 @@ dat_clean %>%
                position = position_dodge(.3))+
   theme_bw()+
   labs("Sync valye for each agent by participant choice")
+
+dat_clean %>%
+  ggplot(aes(y = sync_value, x = choice, color = choice))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.3),
+               fun.args = list(mult = 1))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.3))+
+  theme_bw()+
+  labs("Sync valye by participant choice")
 
 dat_clean %>%
   ggplot(aes(y = sync_value, x = Partner))+
@@ -154,22 +153,23 @@ dat_clean %>%
   theme_bw()+
   labs("Sync valye for each agent by participant choice with individual data points")
 ```
+
 ## What about the correlations between sync values and subjective ratings of closeness?
 ```{r Correlations}
 dat_clean %>% ggplot(aes(x = closeness_diff)) + geom_histogram()+
-  labs(title = "we have a good spread of subjective data")
+  labs(title = "we have a good spread of subjective data")+theme_bw()
 dat_clean %>% ggplot(aes(x = closeness_avg)) + geom_histogram()+
-  labs(title = "we have a good spread of subjective data here too")
+  labs(title = "we have a good spread of subjective data here too")+theme_bw()
 
 dat_clean %>%
   ggplot(aes(sync_value, closeness_diff, color = Partner))+
   geom_point()+
-  geom_smooth(method = "lm", se =F)
+  geom_smooth(method = "lm", se =F)+theme_bw()
 
 dat_clean %>%
   ggplot(aes(sync_value, closeness_avg, color = Partner))+
   geom_point()+
-  geom_smooth(method = "lm", se =F)
+  geom_smooth(method = "lm", se =F)+theme_bw()
 
 ```
 
@@ -177,7 +177,7 @@ dat_clean %>%
 ```{r data without the points beyond 6 SD, echo = F}
 ## Now do some preprocessing
 dat_clean2 = dat_clean %>% 
-  filter(sync_z_value < 6)
+  filter(sync_z_value < 10000)
 ```
 
 ```{r}
@@ -238,18 +238,6 @@ dat_clean2 %>%
   theme_bw()+
   labs(title = "Sync valye for each actual partner w/o 11/12")
 
-dat_clean2 %>% 
-  filter(!participant %in% c("11_12")) %>%
-  ggplot(aes(y = sync_value, x = Partner, color = choice))+
-  geom_point(shape = 1, alpha = .8, position = position_jitterdodge(.1))+
-  stat_summary(fun.data = mean_se, geom = "errorbar", 
-               width = .1, position = position_dodge(.8),
-               fun.args = list(mult = 1.96))+
-  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
-               position = position_dodge(.8))+
-  theme_bw()+
-  labs(title = "Sync valye for each agent by participant choice with individual data points w/o 11/12")
-
   
 ```
 
@@ -292,18 +280,121 @@ dat_clean2 %>%
   theme_bw()+
   labs(title = "Sync valye for each actual partner")
 
-dat_clean2 %>% 
-  filter(!participant %in% c("11_12", "9_10")) %>%
-  ggplot(aes(y = sync_value, x = Partner, color = choice))+
-  geom_point(shape = 1, alpha = .8, position = position_jitterdodge(.1))+
-  stat_summary(fun.data = mean_se, geom = "errorbar", 
-               width = .1, position = position_dodge(.8),
-               fun.args = list(mult = 1.96))+
-  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
-               position = position_dodge(.8))+
-  theme_bw()+
-  labs(title = "Sync valye for each agent by participant choice with individual data points")
-
-
 ```
 
+
+```{r lets try removing blocks that have more than 2 errors, echo = F}
+dat_clean %>% 
+  group_by(participant, Block.thisN) %>%
+  mutate(good_trials_n = n()) %>%
+  filter(good_trials_n > 8) %>%
+  ggplot(aes(y = sync_value, x = Partner, color = choice))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.3),
+               fun.args = list(mult = 1))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.3))+
+  theme_bw()+
+  labs(title = "Exclude bad blocks (n trials >= 8)")
+```
+  
+```{r Check first half of exp vs. second half}
+
+dat_clean %>% 
+  group_by(participant) %>%
+    group_by(participant, Block.thisN) %>%
+  mutate(good_trials_n = n()) %>%
+  filter(good_trials_n > 8) %>%
+  ungroup(Block.thisN) %>%
+  mutate(first_sec = ifelse(Block.thisN <= 9, "First", "Second")) %>%
+  ggplot(aes(y = sync_value, x = Partner))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.3),
+               fun.args = list(mult = 1))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.3))+
+  theme_bw()+facet_wrap(~first_sec)+
+  labs(title = "first vs second blocks")
+
+dat_clean %>% 
+  group_by(participant) %>%
+    group_by(participant, Block.thisN) %>%
+  mutate(good_trials_n = n()) %>%
+  filter(good_trials_n > 8) %>%
+  ungroup(Block.thisN) %>%
+  mutate(first_sec = ifelse(Block.thisN <= 9, "First", "Second")) %>%
+  ggplot(aes(y = sync_value, x = choice, color = choice))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.3),
+               fun.args = list(mult = 1))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.3))+
+  theme_bw()+
+  labs(title = "first vs second blocks")
+
+
+dat_clean %>% 
+  group_by(participant) %>%
+    group_by(participant, Block.thisN) %>%
+  mutate(good_trials_n = n()) %>%
+  filter(good_trials_n > 8) %>%
+  ungroup(Block.thisN) %>%
+  mutate(first_sec = ifelse(Block.thisN <= 9, "First", "Second")) %>%
+  ggplot(aes(y = sync_value, x = Partner, color = choice))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.3),
+               fun.args = list(mult = 1))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.3))+
+  theme_bw()+facet_wrap(~first_sec)+
+  labs(title = "first vs second blocks")
+
+dat_clean %>% 
+  group_by(participant) %>%
+    group_by(participant, Block.thisN) %>%
+  mutate(good_trials_n = n()) %>%
+  filter(good_trials_n > 8) %>%
+  ggplot(aes(y = sync_value, x = Block.thisN, color = Partner))+
+  geom_smooth(method = "lm")+
+  theme_bw()
+
+``````
+
+```{r}
+
+dat_clean = dat_clean %>%
+  group_by(participant) %>%
+  mutate(
+    avg_resp = (key_respLeft.rt+key_respRight.rt)/2
+    ) %>%
+  group_by(participant, Partner) %>%
+  mutate(
+    sync_val_computer = abs((avg_resp-Number))/
+      (avg_resp + Number)*100
+    ) %>%
+  mutate(
+    reSync_value = ifelse(Partner == "Computer", sync_val_computer, 
+                               ifelse(Partner == "Human", sync_value, NA)
+                               )
+         ) 
+
+dat_clean %>% group_by(Partner) %>%
+  summarize(reSync_value = mean(reSync_value),
+            sync_value = mean(sync_value),
+            sync_val_computer = mean(sync_val_computer))
+
+dat_clean %>% group_by(participant, Block.thisN) %>%
+  mutate(good_trials_n = n()) %>%
+  filter(good_trials_n > 8) %>%
+  ungroup(Block.thisN) %>%
+ggplot(aes(y = reSync_value, Partner, color = choice)) +
+    stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.3),
+               fun.args = list(mult = 1))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.3))+theme_bw()+
+  facet_wrap(~participant, scales = "free_y")
+  
+```
+
+  
