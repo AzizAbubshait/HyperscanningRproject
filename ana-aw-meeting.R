@@ -2,7 +2,6 @@ library(tidyverse)
 
 # to do ----
 # 2. calculate D'
-# 3. calculate the matrix thing
 
 # read in data ----
 pilot_path = paste(getwd(), "/pilot2_data_raw/", sep = "")
@@ -43,7 +42,7 @@ dat_clean = dat_p2 %>%
     RespTuringRight = recode(
       RespTuringRight, `1` = "comp", `2` = "human")) %>%
   # remove some vars
-  select(-c(1:4,7:12, 15:82, 93:116, 130:138)) %>%
+  select(-c(1:4,7:12, 15,16,18:82, 93:116, 130:138)) %>%
   ## Delete every 11th row
   filter(
     is.na(Number)==F,
@@ -56,9 +55,6 @@ dat_clean = dat_p2 %>%
     sync_value = abs((key_respLeft.rt-key_respRight.rt))/
       (key_respLeft.rt+key_respRight.rt)*100,
     # create lead/lags for each participant
-    part1_lag_rt = data.table::shift(dat_clean$key_respLeft.rt, n = 1L, type = "lag"),
-    part2_lag_rt = data.table::shift(dat_clean$key_respRight.rt, n = 1L, type = "lag"),
-    
     choice = case_when(RespTuringRight == "comp" &
                          RespTuringLeft == "comp" ~ 
                          "comp_congruent",
@@ -77,21 +73,51 @@ dat_clean = dat_p2 %>%
   group_by(participant, Block.thisN) %>%
   mutate(good_trials_n = n()) %>%
   filter(good_trials_n > 8) %>%
-  ungroup(particiant, Block.thisN)
+  ungroup(participant, Block.thisN)
 
 # 1. sync as a function of perceived (for each participant)
 
 # first we do lead lag for each participant 
 dat_clean$part1_lag_rt = data.table::shift(dat_clean$key_respLeft.rt, n = 1L, type = "lag")
+dat_clean$part2_lag_rt =  data.table::shift(dat_clean$key_respRight.rt, n = 1L, type = "lag")
 
-dat_clean$part1_lag_rt =  data.table::shift(dat_clean$key_respLeft.rt, n = 1L, type = "lag")
+# get rid of NAs
+dat_clean2 = dat_clean %>%
+  group_by(participant, Block.thisN) %>%
+  filter(!trials_loop.thisN==0) %>%
+  ungroup(Block.thisN) %>%
+  select(participant, key_respLeft.rt, key_respRight.rt, Partner,
+         part1_lag_rt, part2_lag_rt, RespTuringLeft, RespTuringRight) %>%
+  mutate(sync_cross_p1 = abs((key_respLeft.rt-part2_lag_rt))/
+           (key_respLeft.rt+part2_lag_rt)*100,
+         sync_cross_p2 = abs((key_respRight.rt-part1_lag_rt))/
+           (key_respRight.rt+part1_lag_rt)*100) %>%
+  pivot_longer(cols = c(sync_cross_p1, sync_cross_p2),
+               values_to = "sync_cross", names_to = "p_position") %>%
+  mutate(new_partner = ifelse(p_position == "sync_cross_p1", 
+                              RespTuringLeft, 
+                              RespTuringRight),
+         )
 
+datdat_clean2 %>% 
+  ggplot(aes(sync_cross_p1, fill = Partner))+
+  geom_histogram()
 
+dat_clean2 %>% 
+  ggplot(aes(y = sync_cross, x = Partner, 
+             color = new_partner))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.3),
+               fun.args = list(mult = 1))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.3))+
+  theme_bw()
 
-
-# Trial number 1 is weird because it is deducted from the last trial
-# of the previous block. We'll just replace all the first trials with actual data.
-dat_t_full$chose.yes.no[dat_t_full$Trial_Number == 1] = 
-  dat_t_full$Chose_Higher_Prob_Square[dat_t_full$Trial_Number == 1]
-
-
+dat_clean2 %>% 
+  ggplot(aes(y = sync_cross, x = new_partner))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.3),
+               fun.args = list(mult = 1))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.3))+
+  theme_bw()
