@@ -73,7 +73,9 @@ dat_clean = dat_p2 %>%
   group_by(participant, Block.thisN) %>%
   mutate(good_trials_n = n()) %>%
   filter(good_trials_n > 8) %>%
-  ungroup(participant, Block.thisN)
+  ungroup(participant, Block.thisN)%>%
+  mutate(key_respLeft.rt = scale(key_respLeft.rt),
+         key_respRight.rt = scale(key_respRight.rt))
 
 # 1. sync as a function of perceived (for each participant)
 
@@ -96,11 +98,11 @@ dat_clean2 = dat_clean %>%
                values_to = "sync_cross", names_to = "p_position") %>%
   mutate(new_partner = ifelse(p_position == "sync_cross_p1", 
                               RespTuringLeft, 
-                              RespTuringRight),
+                              RespTuringRight)
          )
 
-datdat_clean2 %>% 
-  ggplot(aes(sync_cross_p1, fill = Partner))+
+dat_clean2 %>% 
+  ggplot(aes(sync_cross, fill = Partner))+
   geom_histogram()
 
 dat_clean2 %>% 
@@ -121,3 +123,37 @@ dat_clean2 %>%
   stat_summary(fun.data = mean_se, geom = "point", size = 5, 
                position = position_dodge(.3))+
   theme_bw()
+
+# Z value ----
+dat_clean %>%
+  group_by(participant, Block.thisN) %>%
+  filter(!trials_loop.thisN==0) %>%
+  ungroup(Block.thisN) %>%
+  select(participant, key_respLeft.rt, key_respRight.rt, Partner,
+         part1_lag_rt, part2_lag_rt, RespTuringLeft, RespTuringRight) %>%
+  mutate(sync_cross_p1 = abs((key_respLeft.rt-part2_lag_rt))/
+           (key_respLeft.rt+part2_lag_rt)*100,
+         sync_cross_p2 = abs((key_respRight.rt-part1_lag_rt))/
+           (key_respRight.rt+part1_lag_rt)*100) %>%
+  pivot_longer(cols = c(sync_cross_p1, sync_cross_p2),
+               values_to = "sync_cross", names_to = "p_position") %>%
+  mutate(new_partner = ifelse(p_position == "sync_cross_p1", 
+                              RespTuringLeft, 
+                              RespTuringRight),
+  )
+
+dat_clean2 %>% 
+  ggplot(aes(sync_cross_p1, fill = Partner))+
+  geom_histogram()
+
+dat_clean2 %>% 
+  ggplot(aes(y = sync_cross, x = Partner, 
+             color = new_partner))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.3),
+               fun.args = list(mult = 1))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.3))+
+  theme_bw()
+
+# Z value diff method

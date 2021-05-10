@@ -1,0 +1,150 @@
+---
+title: "ana-exp"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+
+# read in
+```{r read-in data, echo = F}
+pilot_path = paste(getwd(), "/raw data/", sep = "")
+list_of_datanames = list.files(pilot_path)
+dat_exp = lapply(paste(pilot_path, list_of_datanames, sep = ""), read.csv)
+dat_exp = do.call(plyr::rbind.fill, dat_exp)
+```
+
+# preprocessing
+```{r now do some data preprocessing, echo = F}
+dat_clean = dat_p2 %>% 
+  group_by(participant) %>% 
+  # get rid of practice trials
+  slice(-c(1:2)) %>% 
+  # we need to recode to 1 and 2 because the fill function won't work for characters. 
+  # It only works for numeric variables
+  mutate(
+    RespTuringLeft = 
+      case_when(RespTuringLeft == "c" ~ 1,
+                RespTuringLeft == "h" ~ 2),
+    RespTuringRight = 
+      case_when(RespTuringRight == "c" ~ 1,
+                RespTuringRight == "h" ~ 2),
+    respQuestRight.keys = as.numeric(respQuestRight.keys)) %>% 
+  fill(RespTuringLeft, .direction = "up") %>%
+  fill(RespTuringRight, .direction = "up") %>%
+  fill(keyTuringLeft.corr, .direction = "up") %>%
+  fill(keyTuringRight.corr, .direction = "up") %>%
+  fill(respQuestLeft.keys, .direction = "up") %>%
+  fill(respQuestRight.keys, .direction = "up") %>%
+  mutate(
+    RespTuringLeft = recode(
+      RespTuringLeft, `1` = "comp", `2` = "human"),
+    RespTuringRight = recode(
+      RespTuringRight, `1` = "comp", `2` = "human")) %>%
+  # remove some vars
+  #select(-c(1:4,7:12, 15,16,18:82, 93:116, 130:138)) %>%
+  ## Delete every 11th row
+  filter(
+    is.na(Number)==F,
+    is.na(key_respLeft.rt) == F,
+    is.na(key_respRight.rt) == F
+  ) %>%
+  mutate(
+    # measure synchrony
+    sync_value = abs((key_respLeft.rt-key_respRight.rt))/
+      (key_respLeft.rt+key_respRight.rt)*100,
+    # create lead/lags for each participant
+    choice = case_when(RespTuringRight == "comp" &
+                         RespTuringLeft == "comp" ~ 
+                         "comp_congruent",
+                       RespTuringRight == "comp" & 
+                         RespTuringLeft == "human" ~ 
+                         "incongruent",
+                       RespTuringRight == "human" & 
+                         RespTuringLeft == "comp" ~ 
+                         "incongruent",
+                       RespTuringRight == "human" & 
+                         RespTuringLeft == "human" ~
+                         "human_congruent"),
+    closeness_diff = abs(respQuestLeft.keys - respQuestRight.keys),
+    closeness_avg = mean(c(respQuestLeft.keys, respQuestRight.keys)
+                         )) %>% 
+  mutate(sync_z_value = scale(sync_value)) %>% 
+  group_by(participant, Block.thisN) %>%
+  mutate(good_trials_n = n()) %>%
+  filter(good_trials_n > 8) %>%
+  ungroup(participant, Block.thisN)%>%
+  mutate(key_respLeft.rt = scale(key_respLeft.rt),
+         key_respRight.rt = scale(key_respRight.rt))
+```
+
+```{r}
+
+dat_clean %>%
+  group_by(participant, Partner, Block.thisIndex) %>% 
+  summarize(choice = first(choice)) %>%
+  ggplot(aes(x = Partner, fill = choice))+
+    geom_histogram(stat="count", position = position_dodge(.9), 
+                   color = "black",
+                   lwd = 1, alpha = .8)+theme_bw()+
+  geom_text(stat='count', aes(label=round(..count..)), 
+            position = position_dodge(.9), vjust=2) +
+  labs(title = "number of choices for all participants")
+
+dat_clean %>%
+  group_by(participant, Partner, Block.thisIndex) %>% 
+  summarize(choice = first(choice)) %>%
+  ggplot(aes(x = Partner, fill = choice))+
+    geom_histogram(stat="count", position = position_dodge(.9), 
+                   color = "black",
+                   lwd = 1, alpha = .8)+theme_bw()+
+  geom_text(stat='count', aes(label=round(..count..)), 
+            position = position_dodge(.9), vjust=2) +
+  facet_wrap(~participant)+
+  labs(title = "number of choices for for each dyad")
+
+dat_clean %>%
+  ggplot(aes(y = sync_value, x = Partner, color = choice))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.3),
+               fun.args = list(mult = 1))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.3))+
+  theme_bw()+
+  labs("Sync valye for each agent by participant choice")
+
+dat_clean %>%
+  ggplot(aes(y = sync_value, x = choice, color = choice))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.3),
+               fun.args = list(mult = 1))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.3))+
+  theme_bw()+
+  labs("Sync valye by participant choice")
+
+dat_clean %>%
+  ggplot(aes(y = sync_value, x = Partner))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.3),
+               fun.args = list(mult = 1))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.3))+
+  theme_bw()+
+  labs("Sync valye for each actual partner")
+
+dat_clean %>%
+  ggplot(aes(y = sync_value, x = Partner, color = choice))+
+  geom_point(shape = 1, alpha = .8, position = position_jitterdodge(.1))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.8),
+               fun.args = list(mult = 1.96))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.8))+
+  theme_bw()+
+  labs("Sync valye for each agent by participant choice with individual data points")
+```
+
