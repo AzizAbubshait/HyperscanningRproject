@@ -15,14 +15,24 @@ pilot_path = paste(getwd(), "/raw data/", sep = "")
 list_of_datanames = list.files(pilot_path)
 dat_exp = lapply(paste(pilot_path, list_of_datanames, sep = ""), read.csv)
 dat_exp = do.call(plyr::rbind.fill, dat_exp)
+
+
 ```
+
 
 # preprocessing
 ```{r now do some data preprocessing, echo = F}
-dat_clean = dat_p2 %>% 
-  group_by(participant) %>% 
+
+dat_clean = dat_exp %>%
+  fill(
+    RespInclusionLeft, .direction = "up") %>%
+  fill(
+    RespInclusionRight, .direction = "up") %>%
+  group_by(
+    participant) %>% 
   # get rid of practice trials
-  slice(-c(1:2)) %>% 
+  slice(
+    -c(1:2)) %>% 
   # we need to recode to 1 and 2 because the fill function won't work for characters. 
   # It only works for numeric variables
   mutate(
@@ -31,19 +41,51 @@ dat_clean = dat_p2 %>%
                 RespTuringLeft == "h" ~ 2),
     RespTuringRight = 
       case_when(RespTuringRight == "c" ~ 1,
-                RespTuringRight == "h" ~ 2),
-    respQuestRight.keys = as.numeric(respQuestRight.keys)) %>% 
-  fill(RespTuringLeft, .direction = "up") %>%
-  fill(RespTuringRight, .direction = "up") %>%
-  fill(keyTuringLeft.corr, .direction = "up") %>%
-  fill(keyTuringRight.corr, .direction = "up") %>%
-  fill(respQuestLeft.keys, .direction = "up") %>%
-  fill(respQuestRight.keys, .direction = "up") %>%
+                RespTuringRight == "h" ~ 2)) %>%
+  fill(
+    RespTuringLeft, .direction = "up") %>%
+  fill(
+    RespTuringRight, .direction = "up") %>%
+  fill(
+    keyTuringLeft.corr, .direction = "up") %>%
+  fill(
+    keyTuringRight.corr, .direction = "up") %>%
+  fill(
+    RespInclusionLeft, .direction = "up") %>%
+  fill(
+    RespInclusionRight, .direction = "up") %>%
   mutate(
     RespTuringLeft = recode(
       RespTuringLeft, `1` = "comp", `2` = "human"),
     RespTuringRight = recode(
       RespTuringRight, `1` = "comp", `2` = "human")) %>%
+  mutate(
+    CorrTuringLeft = case_when(RespTuringLeft == "comp" & 
+                                CorrectTuringReply == "c" ~ 1,
+                               RespTuringLeft == "comp" &
+                                CorrectTuringReply == "h" ~ 0,
+                               RespTuringLeft == "human" &
+                                 CorrectTuringReply == "h" ~ 1,
+                               RespTuringLeft == "human" & 
+                                 CorrectTuringReply == "c" ~ 0),
+    CorrTuringRight = case_when(RespTuringRight == "comp" & 
+                                CorrectTuringReply == "c" ~ 1,
+                               RespTuringRight == "comp" &
+                                CorrectTuringReply == "h" ~ 0,
+                               RespTuringRight == "human" &
+                                 CorrectTuringReply == "h" ~ 1,
+                               RespTuringRight == "human" & 
+                                 CorrectTuringReply == "c" ~ 0)) %>%
+  mutate(
+    CorrTuringDyad = case_when(CorrTuringLeft == 1 & 
+                                 CorrTuringRight == 1 ~ 1,
+                               CorrTuringLeft == 0 & 
+                                 CorrTuringRight == 1 ~ 0,
+                               CorrTuringLeft == 1 & 
+                                 CorrTuringRight == 0 ~ 0,
+                               CorrTuringLeft == 0 & 
+                                 CorrTuringRight == 0 ~ 0)
+    ) %>%
   # remove some vars
   #select(-c(1:4,7:12, 15,16,18:82, 93:116, 130:138)) %>%
   ## Delete every 11th row
@@ -69,8 +111,21 @@ dat_clean = dat_p2 %>%
                        RespTuringRight == "human" & 
                          RespTuringLeft == "human" ~
                          "human_congruent"),
-    closeness_diff = abs(respQuestLeft.keys - respQuestRight.keys),
-    closeness_avg = mean(c(respQuestLeft.keys, respQuestRight.keys)
+    CongruencyChoice = case_when(RespTuringRight == "comp" &
+                         RespTuringLeft == "comp" ~ 
+                         "congruent",
+                       RespTuringRight == "comp" & 
+                         RespTuringLeft == "human" ~ 
+                         "incongruent",
+                       RespTuringRight == "human" & 
+                         RespTuringLeft == "comp" ~ 
+                         "incongruent",
+                       RespTuringRight == "human" & 
+                         RespTuringLeft == "human" ~
+                         "congruent"),
+    closeness_diff = abs(RespInclusionLeft - RespInclusionRight),
+    closeness_avg = mean(c(RespInclusionLeft, RespInclusionRight)
+    
                          )) %>% 
   mutate(sync_z_value = scale(sync_value)) %>% 
   group_by(participant, Block.thisN) %>%
@@ -82,6 +137,7 @@ dat_clean = dat_p2 %>%
 ```
 
 ```{r}
+
 
 dat_clean %>%
   group_by(participant, Partner, Block.thisIndex) %>% 
@@ -110,21 +166,51 @@ dat_clean %>%
   ggplot(aes(y = sync_value, x = Partner, color = choice))+
   stat_summary(fun.data = mean_se, geom = "errorbar", 
                width = .1, position = position_dodge(.3),
-               fun.args = list(mult = 1))+
+               fun.args = list(mult = 1.96))+
   stat_summary(fun.data = mean_se, geom = "point", size = 5, 
                position = position_dodge(.3))+
   theme_bw()+
   labs("Sync valye for each agent by participant choice")
 
 dat_clean %>%
+  ggplot(aes(y = sync_value, x = Partner, color = CongruencyChoice))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.3),
+               fun.args = list(mult = 1.96))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.3))+
+  theme_bw()+
+  labs("Sync valye for each agent by Congruency and partner")
+
+dat_clean %>%
+  ggplot(aes(y = sync_value, x = CongruencyChoice, color = CongruencyChoice))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.3),
+               fun.args = list(mult = 1.96))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.3))+
+  theme_bw()+
+  labs("Sync valye for each agent by Congruency")
+
+dat_clean %>%
   ggplot(aes(y = sync_value, x = choice, color = choice))+
   stat_summary(fun.data = mean_se, geom = "errorbar", 
                width = .1, position = position_dodge(.3),
-               fun.args = list(mult = 1))+
+               fun.args = list(mult = 1.96))+
   stat_summary(fun.data = mean_se, geom = "point", size = 5, 
                position = position_dodge(.3))+
   theme_bw()+
   labs("Sync valye by participant choice")
+
+dat_clean %>%
+  ggplot(aes(y = CorrTuringDyad, x = Partner, color = Partner))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.3),
+               fun.args = list(mult = 1.96))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.3))+
+  theme_bw()+
+  labs("Average Correctness in Turing Test by Partner")
 
 dat_clean %>%
   ggplot(aes(y = sync_value, x = Partner))+
@@ -146,5 +232,16 @@ dat_clean %>%
                position = position_dodge(.8))+
   theme_bw()+
   labs("Sync valye for each agent by participant choice with individual data points")
+
+dat_clean %>%
+  ggplot(aes(sync_value, closeness_diff, color = Partner))+
+  geom_point()+
+  geom_smooth(method = "lm", se =F)+theme_bw()
+
+dat_clean %>%
+  ggplot(aes(sync_value, closeness_avg, color = Partner))+
+  geom_point()+
+  geom_smooth(method = "lm", se =F)+theme_bw()
+
 ```
 
