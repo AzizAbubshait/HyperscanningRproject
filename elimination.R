@@ -1,3 +1,4 @@
+
 # Regress the given variable on the given predictor,
 # suppressing the intercept, and return the residual.
 regressOneOnOne <- function(predictor, other, dataframe){

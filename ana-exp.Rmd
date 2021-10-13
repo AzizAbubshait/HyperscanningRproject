@@ -95,9 +95,6 @@ dat_clean = dat_exp %>%
     is.na(key_respRight.rt) == F
   ) %>%
   mutate(
-    # measure synchrony
-    sync_value = abs((key_respLeft.rt-key_respRight.rt))/
-      (key_respLeft.rt+key_respRight.rt)*100,
     # create lead/lags for each participant
     choice = case_when(RespTuringRight == "comp" &
                          RespTuringLeft == "comp" ~ 
@@ -127,17 +124,20 @@ dat_clean = dat_exp %>%
     closeness_avg = mean(c(RespInclusionLeft, RespInclusionRight)
     
                          )) %>% 
-  mutate(sync_z_value = scale(sync_value)) %>% 
+  #mutate(sync_z_value = scale(sync_value)) %>% 
   group_by(participant, Block.thisN) %>%
   mutate(good_trials_n = n()) %>%
   filter(good_trials_n > 8) %>%
-  ungroup(participant, Block.thisN)%>%
-  mutate(key_respLeft.rt = scale(key_respLeft.rt),
-         key_respRight.rt = scale(key_respRight.rt))
+  ungroup(participant, Block.thisN) %>%
+  filter(key_respLeft.rt > 3,
+         key_respRight.rt > 3) %>%
+  mutate(
+    # measure synchrony
+    sync_value = abs((key_respLeft.rt-key_respRight.rt))/
+      (key_respLeft.rt+key_respRight.rt)*100)
 ```
 
 ```{r}
-
 
 dat_clean %>%
   group_by(participant, Partner, Block.thisIndex) %>% 
@@ -163,6 +163,7 @@ dat_clean %>%
   labs(title = "number of choices for for each dyad")
 
 dat_clean %>%
+  mutate(new_block = ifelse(Block.thisN<10, "first", "second")) %>%
   ggplot(aes(y = sync_value, x = Partner, color = choice))+
   stat_summary(fun.data = mean_se, geom = "errorbar", 
                width = .1, position = position_dodge(.3),
@@ -170,7 +171,40 @@ dat_clean %>%
   stat_summary(fun.data = mean_se, geom = "point", size = 5, 
                position = position_dodge(.3))+
   theme_bw()+
+  labs("Sync valye for each agent by participant choice")+
+  facet_wrap(~new_block)
+
+dat_clean %>%
+  ggplot(aes(y = sync_value, x = Block.thisN, color = Partner))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.3),
+               fun.args = list(mult = 1.96))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.3))+
+  geom_smooth()+
+  theme_bw()+
   labs("Sync valye for each agent by participant choice")
+
+dat_clean %>%
+  ggplot(aes(key_respLeft.rt))+
+  geom_histogram()
+
+dat_clean %>%
+  ggplot(aes(key_respRight.rt))+
+  geom_histogram()
+
+
+dat_clean %>%
+  ggplot(aes(y = sync_value, x = Partner, color = choice))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.3),
+               fun.args = list(mult = 1.96))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.3))+
+  theme_bw()+
+  labs("Sync valye for each agent by participant choice")+
+  facet_wrap(~participant)
+
 
 dat_clean %>%
   ggplot(aes(y = sync_value, x = Partner, color = CongruencyChoice))+
@@ -179,8 +213,26 @@ dat_clean %>%
                fun.args = list(mult = 1.96))+
   stat_summary(fun.data = mean_se, geom = "point", size = 5, 
                position = position_dodge(.3))+
-  theme_bw()+
+  theme_bw()+facet_wrap(~participant, ncol = 3)+
   labs("Sync valye for each agent by Congruency and partner")
+
+for(i in dat_clean$participant){
+  my_plots[[i]] = dat_clean %>%
+    filter(participant == i) %>%
+  ggplot(aes(y = sync_value, x = Partner, color = choice))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.3),
+               fun.args = list(mult = 1.96))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.3))+
+  theme_bw()+
+  labs("Sync valye for each agent by Congruency and partner")}
+
+dat_clean %>%
+  ggplot(aes(y = sync_z_value, fill = CongruencyChoice))+
+  geom_histogram()+
+  theme_bw()+facet_wrap(~Partner)+
+  labs("z Sync valye for each agent by Congruency and partner")
 
 dat_clean %>%
   ggplot(aes(y = sync_value, x = CongruencyChoice, color = CongruencyChoice))+
