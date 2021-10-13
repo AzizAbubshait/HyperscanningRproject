@@ -4,11 +4,13 @@ library (afex)
 library(emmeans)
 
 # Read in ----
-setwd("C:/Users/kkompatsiari/Dropbox/IIT/phd/Experiments/Hyperscanning/HyperscanningRproject")
+#setwd("C:/Users/kkompatsiari/Dropbox/IIT/phd/Experiments/Hyperscanning/HyperscanningRproject")
 pilot_path = paste(getwd(), "/raw data/", sep = "")
 list_of_datanames = list.files(pilot_path)
 dat_exp = lapply(paste(pilot_path, list_of_datanames, sep = ""), read.csv)
 dat_exp = do.call(plyr::rbind.fill, dat_exp)
+
+# Manual entry of subjective ratings of participants 
 dat_exp$RespInclusionRight[which(dat_exp$participant=="41_42Exp")] = 3
 dat_exp$RespInclusionRight[which(dat_exp$participant=="43_44Exp")] = 2
 dat_exp$RespInclusionRight[which(dat_exp$participant=="69_70Exp")] = 2
@@ -17,7 +19,7 @@ dat_exp$RespInclusionRight[which(dat_exp$participant=="69_70Exp")] = 2
 
 # preprocessing ----
 
-dat_clean = dat_exp %>%
+dat_preprocessed = dat_exp %>%
   fill(RespInclusionLeft, .direction = "up") %>%
   fill(RespInclusionRight, .direction = "up") %>%
   group_by(
@@ -33,7 +35,8 @@ dat_clean = dat_exp %>%
                 RespTuringLeft == "h" ~ 2),
     RespTuringRight = 
       case_when(RespTuringRight == "c" ~ 1,
-                RespTuringRight == "h" ~ 2)) %>%
+                RespTuringRight == "h" ~ 2),
+    ) %>%
   fill(
     RespTuringLeft, .direction = "up") %>%
   fill(
@@ -76,13 +79,13 @@ dat_clean = dat_exp %>%
                                CorrTuringLeft == 1 & 
                                  CorrTuringRight == 0 ~ 0,
                                CorrTuringLeft == 0 & 
-                                 CorrTuringRight == 0 ~ 0)
+                                 CorrTuringRight == 0 ~ 0),
+    #create a full trial number
+    trial_num = row_number()
   ) %>%
-  # remove some vars
-  #select(-c(1:4,7:12, 15,16,18:82, 93:116, 130:138)) %>%
   ## Delete every 11th row
   filter(
-    is.na(Number)==F,
+    is.na(Number) == F,
     is.na(key_respLeft.rt) == F,
     is.na(key_respRight.rt) == F
   ) %>%
@@ -114,25 +117,23 @@ dat_clean = dat_exp %>%
                                    "congruent"),
     closeness_diff = abs(RespInclusionLeft - RespInclusionRight),
     closeness_avg = mean(c(RespInclusionLeft, RespInclusionRight)
-                         
     )) %>% 
-  #mutate(sync_z_value = scale(sync_value)) %>% 
-  group_by(participant, Block.thisN) %>%
+  group_by(
+    participant, Block.thisN) %>%
   mutate(good_trials_n = n()) %>%
- # filter(good_trials_n > 8) %>%
+  filter(good_trials_n > 8) %>%
   ungroup(participant, Block.thisN) %>%
   filter(key_respLeft.rt > 4,
          key_respRight.rt > 4) %>%
   mutate(
     # measure synchrony
-    sync_value = abs((key_respLeft.rt-key_respRight.rt))/
-      (key_respLeft.rt+key_respRight.rt)*100) %>% 
-  mutate(sync_z_value = scale(sync_value))  %>% 
+    sync_value = abs((key_respLeft.rt - key_respRight.rt))/
+      (key_respLeft.rt+key_respRight.rt)*100
+    ) %>% 
   mutate(
     # calculate the difference between Rtleft and Computer
     sync_value_Comp_Left = abs((key_respLeft.rt-Comp))/
-      (key_respLeft.rt+Comp)*100) %>% 
-  mutate(
+      (key_respLeft.rt+Comp)*100,
     # calculate the difference between Rtright and Computer
     sync_value_Comp_Right = abs((Comp-key_respRight.rt))/
       (Comp+key_respRight.rt)*100) %>% 
@@ -145,53 +146,39 @@ dat_clean = dat_exp %>%
                                         sync_value_Comp,
                                       Partner == "Human" ~ 
                                         sync_value)) %>%
-    mutate(which_block = ifelse(Block.thisN < 10, "First_half", "Second_half")) 
-  
+  mutate(which_block = ifelse(Block.thisN < 10, "First_half", "Second_half")) %>%
+  mutate(bad_participants = ifelse(participant %in% c(
+    #left handed participants
+    #"51_52Exp", "55_56Exp", "63_64Exp",
+    # low trial counts
+    "39_40Exp", "41_42Exp", "73_74Exp",
+    # RT above 4 seconds
+    "33_34ExpCorr", "21_22Exp"), "bad", "good")) %>%
+  filter(
+    !participant %in% c("41_42Exp", "33_34ExpCorr", "73_74Exp"
+  ))
   
 
 
 
 
 # get rid of bad pees ----
-dat_clean = dat_clean %>%
-  filter(participant!="39_40Exp" & participant!="41_42Exp" & participant!="73_74Exp" &  participant!="51_52Exp" & participant!="55_56Exp" & participant!="63_64Exp" )
-
-# get rid of bad pees only two couples with very few trials and also one that has a lot of trials lower than 4 secs----
-dat_clean = dat_clean %>%
-  filter(participant !="33_34ExpCorr")
-
-# get rid of bad pees only regarding people having few trials after removing 4 secs----
-dat_clean = dat_clean %>%
-  filter( participant !="33_34ExpCorr" & participant !="21_22Exp")
-
-# get rid of bad pees only regarding people having few trials after removing 4 secs----
-dat_clean = dat_clean %>%
-  filter(participant!="41_42Exp" & participant!="73_74Exp" &  participant !="33_34ExpCorr" & participant !="21_22Exp" )
-
-
+# dat_clean = dat_preprocessed %>%
+#   #left handed participants
+#   filter(
+#     !participant %in% c("51_52Exp", "55_56Exp", "63_64Exp",
+#   # low trial counts
+#     "39_40Exp", "41_42Exp", "73_74Exp",
+#   # RT above 4 seconds
+#   "33_34ExpCorr", "21_22Exp"))
 
 
 # check number of blocks per choice
-
-dat_clean2=data.frame(dat_clean %>% group_by(participant, Block.thisN, choice) %>%
-                         summarize(choice = first(choice)) %>%
-                         mutate(counts = ifelse(choice=="incongruent", 1, ifelse(choice=="human_congruent", 2, 3))))
-                   
-                        
-data.frame(dat_clean2 %>% group_by(participant, choice) %>%
-             summarize(count_choices = sum(counts))  %>%
-             mutate(sum_count = case_when(choice == "comp_congruent" ~ count_choices/3,
-                                          choice == "human_congruent" ~ count_choices/2,
-                                          choice == "incongruent" ~ count_choices)))
-                                          
-                              
-               
-                          
-             
+data.frame(dat_preprocessed %>% group_by(participant, Block.thisN, choice) %>%
+                         summarize(tt = n()))
+  
   
 # plots ----
-
-
 dat_correl = dat_clean %>%
   group_by(participant,Partner, choice) %>%
   summarise(ccf_values = ccf(as.numeric(ts(key_respLeft.rt)),as.numeric(ts(key_respRight.rt)), lag.max=00)$acf) #in acf object the correlation values are saved
@@ -269,29 +256,29 @@ resCompChoiceAvg <- cor.test(dat_correl_ComputerChoiceQuest$avg_sync, dat_correl
 resCompIncongruentAvg <- cor.test(dat_correl_IncognruentChoiceQuest$avg_sync, dat_correl_IncognruentChoiceQuest$InclusionQuest, 
                              method = "pearson")
 
-dat_correl = dat_clean %>%
+dat_correl = dat_preprocessed %>%
   group_by(participant,Partner) %>%
-  summarise(ccf_values = ccf(as.numeric(ts(key_respLeft.rt)),as.numeric(ts(key_respRight.rt)), lag.max=0)$acf) #in acf object the correlation values are saved
+  summarise(ccf_values = ccf(as.numeric(ts(key_respLeft.rt)),as.numeric(ts(key_respRight.rt)), lag.max=10)$acf) #in acf object the correlation values are saved
 
 dat_sum_correl = dat_correl %>%
   group_by(Partner, choice) %>%
   summarise(mean_ccf_values = mean(ccf_values))
 
-dat_std = dat_clean %>%
-  group_by(participant,Partner, choice) %>%
+dat_std = dat_preprocessed %>%
+  group_by(participant,Partner, pchoice) %>%
   summarise(data_std_values_left = var(key_respLeft.rt), 
             data_std_values_right = var(key_respRight.rt))%>%
   pivot_longer(cols = c(data_std_values_left, data_std_values_right), names_to = "cazzo")
 
-dat_std %>%
-  ggplot(aes(Partner, value, color = choice))+
+dat_preprocessed %>%
+  ggplot(aes(Partner, sync_value, color = choice))+
   stat_summary(fun.data = mean_se, geom = "errorbar", 
                width = .1, position = position_dodge(.3),
                fun.args = list(mult = 1.96))+
   stat_summary(fun.data = mean_se, geom = "point", size = 5, 
                position = position_dodge(.3))+
-  theme_bw()
-
+  theme_bw()+
+  facet_wrap(~bad_participants, scales = "free_y")
 
 
 dat_std %>%
@@ -362,7 +349,7 @@ dat_clean %>%
   facet_wrap(~participant, ncol=4)
 
 
-dat_clean %>%
+dat_preprocessed %>%
   group_by(participant, Partner) %>% 
   ggplot(aes(x = Partner,fill=Partner))+
   geom_histogram(stat="count", position = position_dodge(0.9), 
@@ -397,7 +384,7 @@ dat_clean %>%
   facet_wrap(~participant, ncol=4)
 
 
-dat_clean %>%
+dat_preprocessed %>%
   group_by(participant, Partner, Block.thisN) %>% 
   summarize(choice = first(choice)) %>%
   ggplot(aes(x = Partner,  fill= choice))+
@@ -408,7 +395,7 @@ dat_clean %>%
             position = position_dodge(.9), vjust=2) +
   labs(title = "number of choices per Partner for all participants")
 
-dat_clean %>%
+dat_preprocessed %>%
   group_by(participant, Partner, Block.thisN) %>% 
   summarize(choice = first(choice)) %>%
   ggplot(aes(x = choice,  fill= choice))+
@@ -420,8 +407,7 @@ dat_clean %>%
   labs(title = "number of choices for all participants")
 
 
-
-dat_clean %>%
+dat_preprocessed %>%
   mutate(new_block = ifelse(Block.thisN<10, "first", "second")) %>%
   ggplot(aes(y = sync_value, x = Partner, color = choice))+
   stat_summary(fun.data = mean_se, geom = "errorbar", 
@@ -465,16 +451,16 @@ dat_clean %>%
   geom_histogram()
 
 
-dat_clean %>%
-  ggplot(aes(y = sync_value, x = choice, color = choice))+
+dat_preprocessed %>%
+  ggplot(aes(y = sync_value, x = Partner, color = Partner))+
   stat_summary(fun.data = mean_se, geom = "errorbar", 
                width = .1, position = position_dodge(.3),
                fun.args = list(mult = 1.96))+
   stat_summary(fun.data = mean_se, geom = "point", size = 5, 
                position = position_dodge(.3))+
   theme_bw()+
-  labs("Sync valye for each agent by participant choice")+
-  facet_wrap(~participant)
+  labs("Sync valye for each agent by participant choice")
+  #facet_wrap(~participant)
 
 
 dat_clean %>%
@@ -484,7 +470,8 @@ dat_clean %>%
                fun.args = list(mult = 1.96))+
   stat_summary(fun.data = mean_se, geom = "point", size = 5, 
                position = position_dodge(.3))+
-  theme_bw()+facet_wrap(~participant)+
+  theme_bw()
+#+facet_wrap(~participant)+
   labs("Sync valye for each agent by Congruency and partner")
 
 for(i in dat_clean$participant){
@@ -505,7 +492,7 @@ dat_clean %>%
   theme_bw()+facet_wrap(~Partner)+
   labs("z Sync valye for each agent by Congruency and partner")
 
-dat_clean %>%
+dat_preprocessed %>%
   ggplot(aes(y = sync_value, x = CongruencyChoice, color = CongruencyChoice))+
   stat_summary(fun.data = mean_se, geom = "errorbar", 
                width = .1, position = position_dodge(.3),
@@ -515,7 +502,7 @@ dat_clean %>%
   theme_bw()+
   labs("Sync valye for each agent by Congruency")
 
-dat_clean %>%
+dat_preprocessed %>%
   ggplot(aes(y = sync_value, x = Partner, color = choice))+
   stat_summary(fun.data = mean_se, geom = "errorbar", 
                width = .1, position = position_dodge(.3),
@@ -536,7 +523,7 @@ dat_clean %>%
   labs("Average Correctness in Turing Test by Partner")
 
 # try a different way for correctness based on the block (same results)
-dat_clean %>%
+dat_preprocessed %>%
   group_by(participant, Partner, Block.thisN) %>%
   summarize(CorrTuringDyad=first(CorrTuringDyad)) %>%
   ggplot(aes(y = CorrTuringDyad, x = Partner, color = Partner))+
@@ -549,7 +536,7 @@ dat_clean %>%
   labs("Average Correctness in Turing Test by Partner")
 
 # trying to plot instances of
-dat_clean %>%
+dat_preprocessed %>%
   group_by(participant, Partner, Block.thisN, choice) %>%
   summarize(choice=first(choice)) %>%
   ggplot(aes(y = choice, x = Partner, color = Partner))+
@@ -563,7 +550,7 @@ dat_clean %>%
 
 
 
-dat_clean %>%
+dat_preprocessed %>%
   ggplot(aes(y = sync_value, x = Partner, color=Partner))+
   stat_summary(fun.data = mean_se, geom = "errorbar", 
                width = .1, position = position_dodge(.3),
@@ -573,7 +560,7 @@ dat_clean %>%
   theme_bw()+
   labs("Sync valye for each actual partner")
 
-dat_clean %>%
+dat_preprocessed %>%
   ggplot(aes(y = sync_value, x = Partner, color=choice))+
   stat_summary(fun.data = mean_se, geom = "errorbar", 
                width = .1, position = position_dodge(.3),
@@ -581,7 +568,8 @@ dat_clean %>%
   stat_summary(fun.data = mean_se, geom = "point", size = 5, 
                position = position_dodge(.3))+
   theme_bw()+
-  labs("Sync valye per choice")
+  labs("Sync valye per choice")+
+  facet_wrap(~participant)
 
 dat_clean %>%
   ggplot(aes(y = sync_value, x = CorrTuringDyad))+
@@ -761,14 +749,14 @@ dat_stats = dat_clean %>%
   group_by(participant, Partner, which_block ) %>%
   summarize(ave_sync = mean(sync_mixed_Comp_Human))
 
-dat_stats_2 = dat_clean %>%
-  group_by(participant, Partner) %>%
-  summarize(ave_sync = mean(sync_value))
+dat_stats_2 = dat_preprocessed %>%
+  group_by(participant, Partner, choice) %>%
+  summarize(ave_sync = mean(sync_value, na.rm = T))
 
-lm2 = aov_car(ave_sync ~ Partner+ Error(1/participant*Partner), dat_stats_2)
-summary(lm2)
-post_hoc = emmeans(lm2, ~ Partner)
-post_hoc
+library(lme4)
+library(lmerTest)
+
+
 
 dat_stats = dat_clean %>%
  # filter(dat_clean$choice %in% c("comp_congruent", "human_congruent")) %>%
@@ -821,18 +809,6 @@ post_hoc = emmeans(lm2, ~ Partner*CorrTuringDyad)
 post_hoc
 
 
-
-lm = aov_car(ave_sync ~ Partner+ Error(1/participant*Partner), dat_stats)
-summary(lm)
-
-
-lm1 = aov_car(ave_sync ~ Partner*which_block+ Error(1/participant*Partner*which_block), dat_stats)
-summary(lm1)
-lm1
-
-lm2 = aov_car(ave_sync ~ Partner+ Error(1/participant*Partner), dat_stats_2)
-summary(lm2)
-
 library(emmeans)
 post_hoc_lm1= emmeans(lm1, ~ Partner*which_block)
 
@@ -843,12 +819,93 @@ post_hoc_lm2 = emmeans(lm2, ~ Partner)
 library(lme4)
 library(lmerTest)
 
-lm2 = lmer(sync_value~Partner + (1|participant), dat_clean)
-summary(lm2)
+lm1 = lmer(sync_value~Partner*choice + 
+             (1|participant), 
+           dat_preprocessed)
 
-lm3 = lmer(sync_value~Partner*choice + (Partner+choice|participant), dat_clean)
-summary(lm3)
+lm2 = lmer(sync_value~Partner*choice + 
+             (1|participant)+
+             (1|trial_num), 
+           dat_preprocessed)
+anova(lm1, lm2)
 
-t.test(dat_stats_2$ave_sync[dat_stats_2$Partner=="Computer"], 
-       dat_stats_2$ave_sync[dat_stats_2$Partner=="Human"], paired = T)
+lm3 = lmer(sync_value~Partner*choice + 
+             (1|participant)+
+             (1|trial_num) +
+             (1|Block.thisN), 
+           dat_preprocessed)
+anova(lm1, lm2, lm3)
+anova(lm3)
 
+lm4 = lmer(sync_value~Partner*choice + 
+             (1|participant)+
+             (1+trial_num|participant) +
+             (1|Block.thisN), 
+           dat_preprocessed)
+anova(lm1, lm2, lm3, lm4)
+anova(lm4)
+
+lm5 = lmer(sync_value~Partner*choice + 
+             (1|participant)+
+             (1+trial_num|participant) +
+             (1+Block.thisN|participant),
+             dat_preprocessed)
+anova(lm1, lm2, lm3, lm4, lm5)
+anova(lm4)
+
+lm5 = lmer(sync_value~Partner*choice + 
+             (1|participant)+
+             (1+trial_num|participant/Partner) +
+             (1+Block.thisN|participant/Partner),
+           dat_preprocessed)
+anova(lm1, lm2, lm3, lm4, lm5)
+anova(lm5)
+
+
+dat_preprocessed %>%
+  ggplot(aes(Partner, sync_value))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 3)+
+  #geom_jitter()+
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = .1)
+
+dat_preprocessed %>%
+  ggplot(aes(choice, sync_value))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 3)+
+  #geom_jitter()+
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = .1)
+
+# 
+(dat_preprocessed %>% group_by(Partner) %>%
+    summarize(mean = mean(sync_value)))
+(dat_preprocessed %>% group_by(choice) %>%
+    summarize(mean = mean(sync_value)))
+
+
+lm_rating = lmer(sync_value~Partner*choice+closeness_diff + 
+             (1|participant)+
+               (1+trial_num|participant/Partner) +
+               (1+Block.thisN|participant/Partner),
+           dat_preprocessed)
+anova(lm_rating)
+
+dat_preprocessed %>%
+  mutate(close_split_avg = ifelse(closeness_avg >= mean(closeness_avg), "close", "far"),
+         close_split_diff = ifelse(closeness_diff >= mean(closeness_diff), "far", "close")) %>%
+  ggplot(aes(Partner, sync_value, color = choice))+
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               width = .1, position = position_dodge(.8),
+               fun.args = list(mult = 1.96))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.8))+
+  theme_bw()+
+  facet_wrap(~ close_split_diff)
+
+dat_preprocessed %>%
+  ggplot(aes(Partner, sync_value, color = choice))+
+stat_summary(fun.data = mean_se, geom = "errorbar", 
+             width = .1, position = position_dodge(.8),
+             fun.args = list(mult = 1.96))+
+  stat_summary(fun.data = mean_se, geom = "point", size = 5, 
+               position = position_dodge(.8))+
+  theme_bw()+
+  facet_wrap(~ which_block)
